@@ -46,7 +46,7 @@ var start = function(file) {
 function readWorldFile(reader, world) {
     readFileFormatHeader(reader, world);
 
-    // 推荐：用 positions 表强制对齐每个区块，避免“某区块0条目时省字段”导致整体错位
+    // 用 positions 对齐每个区块，避免“0条目省字段”导致整体错位
     if (world.positions && world.positions.length >= 6) {
         reader.seek(world.positions[0]); // properties
         readProperties(reader, world);
@@ -79,10 +79,8 @@ function readWorldFile(reader, world) {
         'status': "Done.",
         'done': true
     });
-    console.log(world)
+    console.log(world);
 }
-
-
 
 function readFileFormatHeader(reader, world) {
     self.postMessage({
@@ -122,6 +120,7 @@ function readFileFormatHeader(reader, world) {
     for (i = 0; i < positionsLength; i++) {
         world.positions.push(reader.readInt32());
     }
+
 
 
     // read importances
@@ -616,8 +615,34 @@ function readTiles(reader, world) {
 function readChests(reader, world) {
     var chests = [];
 
+    // var num = reader.readInt16();
+    // var num2 = reader.readInt16();
+
     var num = reader.readInt16();
-    var num2 = reader.readInt16();
+
+    // 旧格式：后面还有一个 int16 表示 chest slots
+    // 新格式（你这个 error.wld）：num==0 时可能省略 num2，只写2字节的 num
+    var num2 = 40; // 默认40格
+    
+    if (world.positions && world.positions.length > 3) {
+        // chests 区块结束 = signs 区块起点
+        var chestSectionEnd = world.positions[3];
+    
+        // 只有当区块里还剩 >=2 字节时才读 num2
+        if ((chestSectionEnd - reader.position) >= 2) {
+            num2 = reader.readInt16();
+        } else {
+            num2 = 40;
+        }
+    } else {
+        // 没有 positions 时：num>0 基本肯定有 num2；num==0 就别吃下一区块
+        if (num > 0) {
+            num2 = reader.readInt16();
+        } else {
+            num2 = 40;
+        }
+    }
+
     var num3;
     var num4;
 
@@ -834,11 +859,24 @@ function readTileEntity(reader) {
 function readTileEntities(reader, world) {
     /** @type{Map<{x:int,y:int}, any>}*/
     let byPosition = new Map();
+    // let count = reader.readInt32();
+    // for (let i = 0; i < count; i++) {
+    //     let tileEntity = readTileEntity(reader);
+    //     byPosition.set(tileEntity.position, tileEntity);
+    // }
     let count = reader.readInt32();
     for (let i = 0; i < count; i++) {
         let tileEntity = readTileEntity(reader);
+    
+        // 1.4.5+ 可能出现新 tileEntity 类型，旧查看器解不了
+        // 这里选择“停止解析 tileEntities”，但不让 worker 直接崩掉
+        if (tileEntity == null) {
+            break;
+        }
+    
         byPosition.set(tileEntity.position, tileEntity);
     }
+
     self.postMessage({
         'tileEntities': byPosition,
     });
