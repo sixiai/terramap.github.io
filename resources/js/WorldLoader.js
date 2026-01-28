@@ -28,14 +28,52 @@ var start = function(file) {
     readWorldFile(ds, world);
 };
 
+// function readWorldFile(reader, world) {
+//     readFileFormatHeader(reader, world);
+//     readProperties(reader, world);
+//     readTiles(reader, world);
+//     readChests(reader, world);
+//     readSigns(reader, world);
+//     readNpcs(reader, world);
+//     readTileEntities(reader, world);
+
+//     self.postMessage({
+//         'status': "Done.",
+//         'done': true
+//     });
+//     console.log(world)
+// }
 function readWorldFile(reader, world) {
     readFileFormatHeader(reader, world);
-    readProperties(reader, world);
-    readTiles(reader, world);
-    readChests(reader, world);
-    readSigns(reader, world);
-    readNpcs(reader, world);
-    readTileEntities(reader, world);
+
+    // 推荐：用 positions 表强制对齐每个区块，避免“某区块0条目时省字段”导致整体错位
+    if (world.positions && world.positions.length >= 6) {
+        reader.seek(world.positions[0]); // properties
+        readProperties(reader, world);
+
+        reader.seek(world.positions[1]); // tiles
+        readTiles(reader, world);
+
+        reader.seek(world.positions[2]); // chests
+        readChests(reader, world);
+
+        reader.seek(world.positions[3]); // signs
+        readSigns(reader, world);
+
+        reader.seek(world.positions[4]); // npcs
+        readNpcs(reader, world);
+
+        reader.seek(world.positions[5]); // tile entities
+        readTileEntities(reader, world);
+    } else {
+        // 兜底：没有 positions 时沿用旧的顺序读
+        readProperties(reader, world);
+        readTiles(reader, world);
+        readChests(reader, world);
+        readSigns(reader, world);
+        readNpcs(reader, world);
+        readTileEntities(reader, world);
+    }
 
     self.postMessage({
         'status': "Done.",
@@ -43,6 +81,8 @@ function readWorldFile(reader, world) {
     });
     console.log(world)
 }
+
+
 
 function readFileFormatHeader(reader, world) {
     self.postMessage({
@@ -68,12 +108,21 @@ function readFileFormatHeader(reader, world) {
     reader.readUint32();
 
     // read positions
-    var i = 0;
+    // var i = 0;
 
+    // var positionsLength = reader.readInt16();
+    // for (i = 0; i < positionsLength; i++) {
+    //     reader.readInt32();
+    // }
+    // read positions
+    var i = 0;
+    
     var positionsLength = reader.readInt16();
+    world.positions = [];
     for (i = 0; i < positionsLength; i++) {
-        reader.readInt32();
+        world.positions.push(reader.readInt32());
     }
+
 
     // read importances
     var importanceLength = reader.readInt16();
